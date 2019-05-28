@@ -17,6 +17,26 @@ import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
+import com.jme3.scene.Geometry;
+import com.jme3.app.SimpleApplication;
+import com.jme3.collision.CollisionResult;
+import com.jme3.collision.CollisionResults;
+import com.jme3.font.BitmapText;
+import com.jme3.input.KeyInput;
+import com.jme3.input.MouseInput;
+import com.jme3.input.controls.ActionListener;
+import com.jme3.input.controls.KeyTrigger;
+import com.jme3.input.controls.MouseButtonTrigger;
+import com.jme3.light.DirectionalLight;
+import com.jme3.material.Material;
+import com.jme3.math.ColorRGBA;
+import com.jme3.math.Ray;
+import com.jme3.math.Vector3f;
+import com.jme3.scene.Geometry;
+import com.jme3.scene.Node;
+import com.jme3.scene.Spatial;
+import com.jme3.scene.shape.Box;
+import com.jme3.scene.shape.Sphere;
 
 /**
  * Example 9 - How to make walls and floors solid.
@@ -31,6 +51,7 @@ public class Main extends SimpleApplication
   private RigidBodyControl landscape;
   private CharacterControl player;
   private Vector3f walkDirection = new Vector3f();
+  private Vector3f walkDirectionEnemy = new Vector3f();
   private boolean left = false, right = false, up = false, down = false;
 
   //Temporary vectors used on each frame.
@@ -42,8 +63,16 @@ public class Main extends SimpleApplication
     Main app = new Main();
     app.start();
   }
+  
+  private Node shootables;
+  private Geometry mark;
 
+  @Override
   public void simpleInitApp() {
+      
+    initCrossHairs(); // a "+" in the middle of the screen to help aiming
+    initMark(); 
+      
     /** Set up Physics */
     bulletAppState = new BulletAppState();
     stateManager.attach(bulletAppState);
@@ -90,9 +119,14 @@ public class Main extends SimpleApplication
 
     // We attach the scene and the player to the rootnode and the physics space,
     // to make them appear in the game world.
+    shootables = new Node("Shootables");
     rootNode.attachChild(sceneModel);
+    
     bulletAppState.getPhysicsSpace().add(landscape);
     bulletAppState.getPhysicsSpace().add(player);
+     
+    shootables.attachChild(makeCharacter()); 
+    rootNode.attachChild(shootables);
   }
 
   private void setUpLight() {
@@ -115,6 +149,9 @@ public class Main extends SimpleApplication
     inputManager.addMapping("Up", new KeyTrigger(KeyInput.KEY_W));
     inputManager.addMapping("Down", new KeyTrigger(KeyInput.KEY_S));
     inputManager.addMapping("Jump", new KeyTrigger(KeyInput.KEY_SPACE));
+    inputManager.addMapping("Shoot", new MouseButtonTrigger(MouseInput.BUTTON_LEFT));
+    
+    inputManager.addListener(this, "Shoot"); 
     inputManager.addListener(this, "Left");
     inputManager.addListener(this, "Right");
     inputManager.addListener(this, "Up");
@@ -124,6 +161,7 @@ public class Main extends SimpleApplication
 
   /** These are our custom actions triggered by key presses.
    * We do not walk yet, we just keep track of the direction the user pressed. */
+  @Override
   public void onAction(String binding, boolean isPressed, float tpf) {
     if (binding.equals("Left")) {
       left = isPressed;
@@ -142,8 +180,39 @@ public class Main extends SimpleApplication
 
       // >= jME3.2
       if (isPressed) { player.jump(new Vector3f(0,20f,0));}
-    }
+    }else if (binding.equals("Shoot")) {
+        // 1. Reset results list.
+        CollisionResults results = new CollisionResults();
+        // 2. Aim the ray from cam loc to cam direction.
+        Ray ray = new Ray(cam.getLocation(), cam.getDirection());
+        // 3. Collect intersections between Ray and Shootables in results list.
+        // DO NOT check collision with the root node, or else ALL collisions will hit the
+        // skybox! Always make a separate node for objects you want to collide with.
+        shootables.collideWith(ray, results);
+        // 4. Print the results
+        System.out.println("----- Collisions? " + results.size() + "-----");
+        for (int i = 0; i < results.size(); i++) {
+          // For each hit, we know distance, impact point, name of geometry.
+          float dist = results.getCollision(i).getDistance();
+          Vector3f pt = results.getCollision(i).getContactPoint();
+          String hit = results.getCollision(i).getGeometry().getName();
+          System.out.println("* Collision #" + i);
+          System.out.println("  You shot " + hit + " at " + pt + ", " + dist + " wu away.");
+        }
+        // 5. Use the results (we mark the hit object)
+        if (results.size() > 0) {
+          // The closest collision point is what was truly hit:
+          CollisionResult closest = results.getClosestCollision();
+          // Let's interact - we mark the hit with a red dot.
+          mark.setLocalTranslation(closest.getContactPoint());
+          rootNode.attachChild(mark);
+        } else {
+          // No hits? Then remove the red mark.
+          rootNode.detachChild(mark);
+        }
+      }
   }
+  
 
   /**
    * This is the main event loop--walking happens here.
@@ -157,6 +226,8 @@ public class Main extends SimpleApplication
         camDir.set(cam.getDirection()).multLocal(0.6f);
         camLeft.set(cam.getLeft()).multLocal(0.4f);
         walkDirection.set(0, 0, 0);
+        walkDirectionEnemy.set(0, 0, 0);
+        
         if (left) {
             walkDirection.addLocal(camLeft);
         }
@@ -169,7 +240,40 @@ public class Main extends SimpleApplication
         if (down) {
             walkDirection.addLocal(camDir.negate());
         }
+        
         player.setWalkDirection(walkDirection);
         cam.setLocation(player.getPhysicsLocation());
     }
+    
+    protected void initMark() {
+    Sphere sphere = new Sphere(30, 30, 0.2f);
+    mark = new Geometry("BOOM!", sphere);
+    Material mark_mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+    mark_mat.setColor("Color", ColorRGBA.Red);
+    mark.setMaterial(mark_mat);
+  }
+
+  /** A centred plus sign to help the player aim. */
+  protected void initCrossHairs() {
+    setDisplayStatView(false);
+    guiFont = assetManager.loadFont("Interface/Fonts/Default.fnt");
+    BitmapText ch = new BitmapText(guiFont, false);
+    ch.setSize(guiFont.getCharSet().getRenderedSize() * 2);
+    ch.setText("+"); // crosshairs
+    ch.setLocalTranslation( // center
+      settings.getWidth() / 2 - ch.getLineWidth()/2,
+      settings.getHeight() / 2 + ch.getLineHeight()/2, 0);
+    guiNode.attachChild(ch);
+  }
+  
+  protected Spatial makeCharacter() {
+    // load a character from jme3test-test-data
+    Spatial golem = assetManager.loadModel("Models/Oto/Oto.mesh.xml");
+    golem.scale(1f);
+    golem.setLocalTranslation(2.0f, 5f, 2f);
+
+    // We must add a light to make the model visible
+    return golem;
+  }
+
 }
