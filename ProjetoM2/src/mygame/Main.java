@@ -58,6 +58,8 @@ public class Main extends SimpleApplication
   //They here to avoid instanciating new vectors on each frame
   private Vector3f camDir = new Vector3f();
   private Vector3f camLeft = new Vector3f();
+  
+  private float lastEnemyTime = 0f;
 
   public static void main(String[] args) {
     Main app = new Main();
@@ -124,8 +126,7 @@ public class Main extends SimpleApplication
     
     bulletAppState.getPhysicsSpace().add(landscape);
     bulletAppState.getPhysicsSpace().add(player);
-     
-    shootables.attachChild(makeCharacter()); 
+    
     rootNode.attachChild(shootables);
   }
 
@@ -188,28 +189,35 @@ public class Main extends SimpleApplication
         // 3. Collect intersections between Ray and Shootables in results list.
         // DO NOT check collision with the root node, or else ALL collisions will hit the
         // skybox! Always make a separate node for objects you want to collide with.
-        shootables.collideWith(ray, results);
+       
         // 4. Print the results
-        System.out.println("----- Collisions? " + results.size() + "-----");
-        for (int i = 0; i < results.size(); i++) {
-          // For each hit, we know distance, impact point, name of geometry.
-          float dist = results.getCollision(i).getDistance();
-          Vector3f pt = results.getCollision(i).getContactPoint();
-          String hit = results.getCollision(i).getGeometry().getName();
-          System.out.println("* Collision #" + i);
-          System.out.println("  You shot " + hit + " at " + pt + ", " + dist + " wu away.");
+//        System.out.println("----- Collisions? " + results.size() + "-----");
+//        for (int i = 0; i < results.size(); i++) {
+//          // For each hit, we know distance, impact point, name of geometry.
+//          float dist = results.getCollision(i).getDistance();
+//          Vector3f pt = results.getCollision(i).getContactPoint();
+//          String hit = results.getCollision(i).getGeometry().getName();
+//          System.out.println("* Collision #" + i);
+//          System.out.println("  You shot " + hit + " at " + pt + ", " + dist + " wu away.");
+//        }
+
+        for(Spatial s : shootables.getChildren()){
+            s.collideWith(ray, results);
+            if (results.size() > 0)
+                shootables.detachChild(s);
+         
         }
-        // 5. Use the results (we mark the hit object)
-        if (results.size() > 0) {
-          // The closest collision point is what was truly hit:
-          CollisionResult closest = results.getClosestCollision();
-          // Let's interact - we mark the hit with a red dot.
-          mark.setLocalTranslation(closest.getContactPoint());
-          rootNode.attachChild(mark);
-        } else {
-          // No hits? Then remove the red mark.
-          rootNode.detachChild(mark);
-        }
+//        // 5. Use the results (we mark the hit object)
+//        if (results.size() > 0) {
+//          // The closest collision point is what was truly hit:
+//          CollisionResult closest = results.getClosestCollision();
+//          // Let's interact - we mark the hit with a red dot.
+//          mark.setLocalTranslation(closest.getContactPoint());
+//          rootNode.attachChild(mark);
+//        } else {
+//          // No hits? Then remove the red mark.
+//          rootNode.detachChild(mark);
+//        }
       }
   }
   
@@ -223,6 +231,7 @@ public class Main extends SimpleApplication
    */
   @Override
     public void simpleUpdate(float tpf) {
+       
         camDir.set(cam.getDirection()).multLocal(0.6f);
         camLeft.set(cam.getLeft()).multLocal(0.4f);
         walkDirection.set(0, 0, 0);
@@ -243,6 +252,22 @@ public class Main extends SimpleApplication
         
         player.setWalkDirection(walkDirection);
         cam.setLocation(player.getPhysicsLocation());
+        
+        System.out.println(timer.getTimeInSeconds());
+        
+        
+        
+        if(timer.getTimeInSeconds() > lastEnemyTime + 5){
+            lastEnemyTime = timer.getTimeInSeconds();
+            shootables.attachChild(makeCharacter());
+        }
+         
+        //Movimentação Inimigo
+        for(Spatial s : shootables.getChildren()){
+            s.lookAt(cam.getLocation(), Vector3f.UNIT_Y);
+            Vector3f dir = s.getLocalTranslation().subtract(cam.getLocation()).normalize().negate();
+            s.move(dir.x*5f*tpf, 0, dir.z*5f*tpf); 
+        }
     }
     
     protected void initMark() {
