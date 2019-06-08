@@ -1,6 +1,8 @@
 package mygame;
 
-import com.jme3.app.SimpleApplication;
+import com.jme3.animation.AnimChannel;
+import com.jme3.animation.AnimControl;
+import com.jme3.animation.LoopMode;
 import com.jme3.asset.plugins.ZipLocator;
 import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.collision.shapes.CapsuleCollisionShape;
@@ -8,18 +10,8 @@ import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.control.CharacterControl;
 import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.bullet.util.CollisionShapeFactory;
-import com.jme3.input.KeyInput;
-import com.jme3.input.controls.ActionListener;
-import com.jme3.input.controls.KeyTrigger;
 import com.jme3.light.AmbientLight;
-import com.jme3.light.DirectionalLight;
-import com.jme3.math.ColorRGBA;
-import com.jme3.math.Vector3f;
-import com.jme3.scene.Node;
-import com.jme3.scene.Spatial;
-import com.jme3.scene.Geometry;
 import com.jme3.app.SimpleApplication;
-import com.jme3.collision.CollisionResult;
 import com.jme3.collision.CollisionResults;
 import com.jme3.font.BitmapText;
 import com.jme3.input.KeyInput;
@@ -28,15 +20,15 @@ import com.jme3.input.controls.ActionListener;
 import com.jme3.input.controls.KeyTrigger;
 import com.jme3.input.controls.MouseButtonTrigger;
 import com.jme3.light.DirectionalLight;
-import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Ray;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
-import com.jme3.scene.shape.Box;
-import com.jme3.scene.shape.Sphere;
+import java.util.ArrayList;
+import java.util.List;
+
 
 /**
  * Example 9 - How to make walls and floors solid.
@@ -49,17 +41,25 @@ public class Main extends SimpleApplication
   private Spatial sceneModel;
   private BulletAppState bulletAppState;
   private RigidBodyControl landscape;
+  
+  //Player
   private CharacterControl player;
   private Vector3f walkDirection = new Vector3f();
-  private Vector3f walkDirectionEnemy = new Vector3f();
   private boolean left = false, right = false, up = false, down = false;
-
-  //Temporary vectors used on each frame.
-  //They here to avoid instanciating new vectors on each frame
   private Vector3f camDir = new Vector3f();
   private Vector3f camLeft = new Vector3f();
   
+  //Enemy
+  private Vector3f walkDirectionEnemy = new Vector3f();
+  private float enemySpeed = 5f;
   private float lastEnemyTime = 0f;
+  private float difficultyTime = 0f;
+  private List<Vector3f> positionEnemy = new ArrayList();
+  private int qtdEnemy = 0;
+
+  
+  AnimControl control;
+  AnimChannel channel;
 
   public static void main(String[] args) {
     Main app = new Main();
@@ -73,12 +73,10 @@ public class Main extends SimpleApplication
   public void simpleInitApp() {
       
     initCrossHairs(); // a "+" in the middle of the screen to help aiming
-    initMark(); 
       
     /** Set up Physics */
     bulletAppState = new BulletAppState();
     stateManager.attach(bulletAppState);
-    //bulletAppState.setDebugEnabled(true);
 
     // We re-use the flyby camera for rotation, while positioning is handled by physics
     viewPort.setBackgroundColor(new ColorRGBA(0.7f, 0.8f, 1f, 1f));
@@ -93,8 +91,7 @@ public class Main extends SimpleApplication
 
     // We set up collision detection for the scene by creating a
     // compound collision shape and a static RigidBodyControl with mass zero.
-    CollisionShape sceneShape =
-            CollisionShapeFactory.createMeshShape(sceneModel);
+    CollisionShape sceneShape = CollisionShapeFactory.createMeshShape(sceneModel);
     landscape = new RigidBodyControl(sceneShape, 0);
     sceneModel.addControl(landscape);
 
@@ -111,13 +108,9 @@ public class Main extends SimpleApplication
     //Some methods used for setting gravity related variables were deprecated in
     //the 3.2 version of the engine. Choose the method that matches your version
     //of the engine.
-    // < jME3.2
-    // player.setGravity(30f);
-
-    // >= jME3.2
-    player.setGravity(new Vector3f(0,-30f,0));
-
+    player.setGravity(new Vector3f(0,-70f,0));
     player.setPhysicsLocation(new Vector3f(0, 10, 0));
+    
 
     // We attach the scene and the player to the rootnode and the physics space,
     // to make them appear in the game world.
@@ -128,6 +121,15 @@ public class Main extends SimpleApplication
     bulletAppState.getPhysicsSpace().add(player);
     
     rootNode.attachChild(shootables);
+    
+    
+    
+    positionEnemy.add(new Vector3f(-75.8f, 1f, -24f));
+    positionEnemy.add(new Vector3f(5.5f, 1f, 79f));
+    positionEnemy.add(new Vector3f(58.3f, 1f, 79f));
+    positionEnemy.add(new Vector3f(-2.5f, 1f, -114f));
+    positionEnemy.add(new Vector3f(38f, 1f, -114f));
+    positionEnemy.add(new Vector3f(78f, 1f, -114f));
   }
 
   private void setUpLight() {
@@ -173,62 +175,25 @@ public class Main extends SimpleApplication
     } else if (binding.equals("Down")) {
       down = isPressed;
     } else if (binding.equals("Jump")) {
-      //Some methods used for setting gravity related variables were deprecated in
-      //the 3.2 version of the engine. Choose the method that matches your version
-      //of the engine.
-      // < jME3.2
-      //if (isPressed) { player.jump();}
-
-      // >= jME3.2
-      if (isPressed) { player.jump(new Vector3f(0,20f,0));}
+        if (isPressed) { 
+            player.jump(new Vector3f(0,20f,0));
+        }
     }else if (binding.equals("Shoot")) {
-        // 1. Reset results list.
         CollisionResults results = new CollisionResults();
-        // 2. Aim the ray from cam loc to cam direction.
         Ray ray = new Ray(cam.getLocation(), cam.getDirection());
-        // 3. Collect intersections between Ray and Shootables in results list.
-        // DO NOT check collision with the root node, or else ALL collisions will hit the
-        // skybox! Always make a separate node for objects you want to collide with.
-       
-        // 4. Print the results
-//        System.out.println("----- Collisions? " + results.size() + "-----");
-//        for (int i = 0; i < results.size(); i++) {
-//          // For each hit, we know distance, impact point, name of geometry.
-//          float dist = results.getCollision(i).getDistance();
-//          Vector3f pt = results.getCollision(i).getContactPoint();
-//          String hit = results.getCollision(i).getGeometry().getName();
-//          System.out.println("* Collision #" + i);
-//          System.out.println("  You shot " + hit + " at " + pt + ", " + dist + " wu away.");
-//        }
 
         for(Spatial s : shootables.getChildren()){
             s.collideWith(ray, results);
-            if (results.size() > 0)
+            if (results.size() > 0){
                 shootables.detachChild(s);
+//                bulletAppState.getPhysicsSpace().remove(s);
+                break;
+            }
          
         }
-//        // 5. Use the results (we mark the hit object)
-//        if (results.size() > 0) {
-//          // The closest collision point is what was truly hit:
-//          CollisionResult closest = results.getClosestCollision();
-//          // Let's interact - we mark the hit with a red dot.
-//          mark.setLocalTranslation(closest.getContactPoint());
-//          rootNode.attachChild(mark);
-//        } else {
-//          // No hits? Then remove the red mark.
-//          rootNode.detachChild(mark);
-//        }
       }
   }
   
-
-  /**
-   * This is the main event loop--walking happens here.
-   * We check in which direction the player is walking by interpreting
-   * the camera direction forward (camDir) and to the side (camLeft).
-   * The setWalkDirection() command is what lets a physics-controlled player walk.
-   * We also make sure here that the camera moves with player.
-   */
   @Override
     public void simpleUpdate(float tpf) {
        
@@ -253,30 +218,39 @@ public class Main extends SimpleApplication
         player.setWalkDirection(walkDirection);
         cam.setLocation(player.getPhysicsLocation());
         
-        System.out.println(timer.getTimeInSeconds());
-        
-        
-        
         if(timer.getTimeInSeconds() > lastEnemyTime + 5){
             lastEnemyTime = timer.getTimeInSeconds();
             shootables.attachChild(makeCharacter());
         }
+        
+        if(timer.getTimeInSeconds() > difficultyTime + 5 && enemySpeed <= 20){
+            difficultyTime = timer.getTimeInSeconds();
+            enemySpeed = enemySpeed + 5;
+        }
          
         //Movimentação Inimigo
         for(Spatial s : shootables.getChildren()){
-            s.lookAt(cam.getLocation(), Vector3f.UNIT_Y);
+            s.lookAt(cam.getLocation(),  Vector3f.UNIT_Y.normalize());
+            s.rotate(0, (float) Math.PI , 0);
             Vector3f dir = s.getLocalTranslation().subtract(cam.getLocation()).normalize().negate();
-            s.move(dir.x*5f*tpf, 0, dir.z*5f*tpf); 
+//                s.move(dir.x*enemySpeed*tpf, 0, dir.z*enemySpeed*tpf);  
+////                s.getControl(CharacterControl.class).setPhysicsLocation(s.getLocalTranslation());
+//            System.out.println(cam.getLocation().subtract(s.getLocalTranslation()).getX());
+            if(cam.getLocation().subtract(s.getLocalTranslation()).getX() < 5 && cam.getLocation().subtract(s.getLocalTranslation()).getX() > -5
+               && cam.getLocation().subtract(s.getLocalTranslation()).getZ() < 5 && cam.getLocation().subtract(s.getLocalTranslation()).getZ() > -5){
+                    s.move(dir.x*0*tpf, 0, dir.z*0*tpf);
+                    channel.setAnim("Attack3", 1f); 
+                    channel.setLoopMode(LoopMode.Cycle);
+            }
+            else{
+                s.move(dir.x*enemySpeed*tpf, 0, dir.z*enemySpeed*tpf);
+            }
+        
+            System.out.println("X " + cam.getLocation().x + "z " + cam.getLocation().z);
         }
     }
     
-    protected void initMark() {
-    Sphere sphere = new Sphere(30, 30, 0.2f);
-    mark = new Geometry("BOOM!", sphere);
-    Material mark_mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-    mark_mat.setColor("Color", ColorRGBA.Red);
-    mark.setMaterial(mark_mat);
-  }
+    
 
   /** A centred plus sign to help the player aim. */
   protected void initCrossHairs() {
@@ -292,13 +266,58 @@ public class Main extends SimpleApplication
   }
   
   protected Spatial makeCharacter() {
-    // load a character from jme3test-test-data
-    Spatial golem = assetManager.loadModel("Models/Oto/Oto.mesh.xml");
-    golem.scale(1f);
-    golem.setLocalTranslation(2.0f, 5f, 2f);
 
-    // We must add a light to make the model visible
-    return golem;
+    Spatial enemy = assetManager.loadModel("Models/Ninja/Ninja.mesh.xml");
+    enemy.scale(0.025f);
+    enemy.setLocalTranslation(positionEnemy.get(qtdEnemy%6)); 
+    qtdEnemy++;
+    
+//    AnimChannel channel;
+//    AnimControl control;
+   
+    control = enemy.getControl(AnimControl.class);
+    channel = control.createChannel();
+    channel.setAnim("Walk", 0.50f);
+    channel.setLoopMode(LoopMode.Loop);
+    
+    
+//    CapsuleCollisionShape capsuleShape = new CapsuleCollisionShape(1.5f, 6f, 1);
+//    CharacterControl enemy_character = new CharacterControl(capsuleShape, 0.01f);
+//    enemy_character.setJumpSpeed(20);
+//    enemy_character.setFallSpeed(30);
+
+    //Some methods used for setting gravity related variables were deprecated in
+    //the 3.2 version of the engine. Choose the method that matches your version
+    //of the engine.
+    // < jME3.2
+    // player.setGravity(a30f);
+
+    // >= jME3.2
+//    enemy_character.setGravity(new Vector3f(0,-30f,0));
+//
+//   enemy_character.setPhysicsLocation(new Vector3f(0, 10, 0));
+//    bulletAppState.getPhysicsSpace().add(enemy_character);
+//  
+//    enemy.addControl(enemy_character);
+//    for (String anim : control.getAnimationNames()) {
+//    System.out.println(anim);
+//}
+    
+
+    return enemy;
+  }
+  
+  public void onAnimCycleDone(AnimControl control, AnimChannel channel, String animName) {
+    if (animName.equals("Attack3")) {
+      channel.setAnim("Walk", 0.50f);
+      channel.setLoopMode(LoopMode.Loop);
+      channel.setSpeed(1f);
+    }
+    
+  }
+
+  public void onAnimChange(AnimControl control, AnimChannel channel, String animName) {
+    // unused
   }
 
 }
