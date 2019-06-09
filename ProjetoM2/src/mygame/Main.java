@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 
+
 /**
  * Example 9 - How to make walls and floors solid.
  * This collision code uses Physics and a custom Action Listener.
@@ -48,6 +49,7 @@ public class Main extends SimpleApplication
   private boolean left = false, right = false, up = false, down = false;
   private Vector3f camDir = new Vector3f();
   private Vector3f camLeft = new Vector3f();
+  private int playerLife = 200;
   
   //Enemy
   private Vector3f walkDirectionEnemy = new Vector3f();
@@ -56,10 +58,14 @@ public class Main extends SimpleApplication
   private float difficultyTime = 0f;
   private List<Vector3f> positionEnemy = new ArrayList();
   private int qtdEnemy = 0;
-
-  
   AnimControl control;
   AnimChannel channel;
+  
+  
+  //Game
+  BitmapText hudText;
+  private int score = 0;
+  private int scoringRecord = 0;
 
   public static void main(String[] args) {
     Main app = new Main();
@@ -123,13 +129,21 @@ public class Main extends SimpleApplication
     rootNode.attachChild(shootables);
     
     
-    
+    //Valres para posição de adição do inimigo
     positionEnemy.add(new Vector3f(-75.8f, 1f, -24f));
     positionEnemy.add(new Vector3f(5.5f, 1f, 79f));
     positionEnemy.add(new Vector3f(58.3f, 1f, 79f));
     positionEnemy.add(new Vector3f(-2.5f, 1f, -114f));
     positionEnemy.add(new Vector3f(38f, 1f, -114f));
     positionEnemy.add(new Vector3f(78f, 1f, -114f));
+    
+    
+    //HUD
+    hudText = new BitmapText(guiFont, false);
+    hudText.setSize(guiFont.getCharSet().getRenderedSize());      // font size
+    hudText.setColor(ColorRGBA.Yellow);                             // font color
+    hudText.setLocalTranslation(20, this.settings.getHeight() - 20, 0); // position
+    guiNode.attachChild(hudText);
   }
 
   private void setUpLight() {
@@ -144,8 +158,6 @@ public class Main extends SimpleApplication
     rootNode.addLight(dl);
   }
 
-  /** We over-write some navigational key mappings here, so we can
-   * add physics-controlled walking and jumping: */
   private void setUpKeys() {
     inputManager.addMapping("Left", new KeyTrigger(KeyInput.KEY_A));
     inputManager.addMapping("Right", new KeyTrigger(KeyInput.KEY_D));
@@ -179,14 +191,20 @@ public class Main extends SimpleApplication
             player.jump(new Vector3f(0,20f,0));
         }
     }else if (binding.equals("Shoot")) {
+        //Colisão do inimigo com o tiro
         CollisionResults results = new CollisionResults();
         Ray ray = new Ray(cam.getLocation(), cam.getDirection());
 
         for(Spatial s : shootables.getChildren()){
             s.collideWith(ray, results);
             if (results.size() > 0){
+               s.getControl(AnimControl.class).getChannel(0).setAnim("Death1");
+               s.getControl(AnimControl.class).getChannel(0).setLoopMode(LoopMode.Cycle);
+         
+                score+= 10;
+                
                 shootables.detachChild(s);
-//                bulletAppState.getPhysicsSpace().remove(s);
+                bulletAppState.getPhysicsSpace().remove(s);
                 break;
             }
          
@@ -223,35 +241,23 @@ public class Main extends SimpleApplication
             shootables.attachChild(makeCharacter());
         }
         
-        if(timer.getTimeInSeconds() > difficultyTime + 5 && enemySpeed <= 20){
+        if(timer.getTimeInSeconds() > difficultyTime + 20 && enemySpeed <= 30){
             difficultyTime = timer.getTimeInSeconds();
             enemySpeed = enemySpeed + 5;
         }
+        
+        hudText.setText("SCORE: " + score + "\nLIFE: " + playerLife + "\nRECORD: " + scoringRecord);
          
         //Movimentação Inimigo
         for(Spatial s : shootables.getChildren()){
-            s.lookAt(cam.getLocation(),  Vector3f.UNIT_Y.normalize());
-            s.rotate(0, (float) Math.PI , 0);
-            Vector3f dir = s.getLocalTranslation().subtract(cam.getLocation()).normalize().negate();
-//                s.move(dir.x*enemySpeed*tpf, 0, dir.z*enemySpeed*tpf);  
-////                s.getControl(CharacterControl.class).setPhysicsLocation(s.getLocalTranslation());
-//            System.out.println(cam.getLocation().subtract(s.getLocalTranslation()).getX());
-            if(cam.getLocation().subtract(s.getLocalTranslation()).getX() < 5 && cam.getLocation().subtract(s.getLocalTranslation()).getX() > -5
-               && cam.getLocation().subtract(s.getLocalTranslation()).getZ() < 5 && cam.getLocation().subtract(s.getLocalTranslation()).getZ() > -5){
-                    s.move(dir.x*0*tpf, 0, dir.z*0*tpf);
-                    channel.setAnim("Attack3", 1f); 
-                    channel.setLoopMode(LoopMode.Cycle);
-            }
-            else{
-                s.move(dir.x*enemySpeed*tpf, 0, dir.z*enemySpeed*tpf);
-            }
+            enemyActions(s, tpf);
+        }
         
-            System.out.println("X " + cam.getLocation().x + "z " + cam.getLocation().z);
+        if(playerLife <= 0){
+            resetVariables();
         }
     }
-    
-    
-
+   
   /** A centred plus sign to help the player aim. */
   protected void initCrossHairs() {
     setDisplayStatView(false);
@@ -271,39 +277,32 @@ public class Main extends SimpleApplication
     enemy.scale(0.025f);
     enemy.setLocalTranslation(positionEnemy.get(qtdEnemy%6)); 
     qtdEnemy++;
-    
-//    AnimChannel channel;
-//    AnimControl control;
    
     control = enemy.getControl(AnimControl.class);
     channel = control.createChannel();
     channel.setAnim("Walk", 0.50f);
     channel.setLoopMode(LoopMode.Loop);
-    
-    
-//    CapsuleCollisionShape capsuleShape = new CapsuleCollisionShape(1.5f, 6f, 1);
-//    CharacterControl enemy_character = new CharacterControl(capsuleShape, 0.01f);
-//    enemy_character.setJumpSpeed(20);
-//    enemy_character.setFallSpeed(30);
 
-    //Some methods used for setting gravity related variables were deprecated in
-    //the 3.2 version of the engine. Choose the method that matches your version
-    //of the engine.
-    // < jME3.2
-    // player.setGravity(a30f);
-
-    // >= jME3.2
-//    enemy_character.setGravity(new Vector3f(0,-30f,0));
-//
-//   enemy_character.setPhysicsLocation(new Vector3f(0, 10, 0));
-//    bulletAppState.getPhysicsSpace().add(enemy_character);
-//  
-//    enemy.addControl(enemy_character);
-//    for (String anim : control.getAnimationNames()) {
-//    System.out.println(anim);
-//}
-    
-
+//Walk
+//Kick
+//Spin
+//Idle3
+//Idle2
+//Jump
+//Idle1
+//HighJump
+//JumpNoHeight
+//Crouch
+//Climb
+//Stealth
+//Death2
+//Backflip 
+//Block
+//SideKick
+//Death1
+//Attack3
+//Attack2
+//Attack1
     return enemy;
   }
   
@@ -313,11 +312,40 @@ public class Main extends SimpleApplication
       channel.setLoopMode(LoopMode.Loop);
       channel.setSpeed(1f);
     }
-    
   }
 
   public void onAnimChange(AnimControl control, AnimChannel channel, String animName) {
     // unused
   }
-
+  
+  public void enemyActions(Spatial s, float tpf){
+      s.lookAt(cam.getLocation(),  Vector3f.UNIT_Y.normalize());
+            s.rotate(0, (float) Math.PI , 0);
+            Vector3f dir = s.getLocalTranslation().subtract(cam.getLocation()).normalize().negate();
+            if(cam.getLocation().subtract(s.getLocalTranslation()).getX() < 5 && cam.getLocation().subtract(s.getLocalTranslation()).getX() > -5
+               && cam.getLocation().subtract(s.getLocalTranslation()).getZ() < 5 && cam.getLocation().subtract(s.getLocalTranslation()).getZ() > -5){
+                    s.move(dir.x*0*tpf, 0, dir.z*0*tpf);  
+                    if(!s.getControl(AnimControl.class).getChannel(0).getAnimationName().equals("Attack3") && !s.getControl(AnimControl.class).getChannel(0).getAnimationName().equals("Death1")){
+                        s.getControl(AnimControl.class).getChannel(0).setAnim("Attack3");
+                        s.getControl(AnimControl.class).getChannel(0).setLoopMode(LoopMode.Cycle);
+                    }
+                    playerLife -= 1;    
+             
+                }
+            else{
+                s.move(dir.x*enemySpeed*tpf, 0, dir.z*enemySpeed*tpf);
+                if(!s.getControl(AnimControl.class).getChannel(0).getAnimationName().equals("Walk") && !s.getControl(AnimControl.class).getChannel(0).getAnimationName().equals("Death1")){
+                    s.getControl(AnimControl.class).getChannel(0).setAnim("Walk");
+                    s.getControl(AnimControl.class).getChannel(0).setLoopMode(LoopMode.Loop);
+                }
+            }
+            
+    }
+  
+  public void resetVariables(){
+      enemySpeed = 5f;
+      playerLife = 200;
+      scoringRecord = score;
+      score = 0;
+  }
 }
