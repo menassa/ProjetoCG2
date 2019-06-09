@@ -46,7 +46,7 @@ public class Main extends SimpleApplication implements ActionListener {
     private boolean left = false, right = false, up = false, down = false;
     private Vector3f camDir = new Vector3f();
     private Vector3f camLeft = new Vector3f();
-    private int playerLife = 100;
+    private double playerLife = 100;
   
     //Enemy
     private Vector3f walkDirectionEnemy = new Vector3f();
@@ -69,7 +69,6 @@ public class Main extends SimpleApplication implements ActionListener {
     }
     
     private Node shootables;
-    private Geometry mark;
     
     @Override
     public void simpleInitApp() {
@@ -122,7 +121,7 @@ public class Main extends SimpleApplication implements ActionListener {
     
         rootNode.attachChild(shootables);
     
-        //Valres para posição de adição do inimigo
+        // Valores para posição de adição do inimigo
         positionEnemy.add(new Vector3f(-75.8f, 1f, -24f));
         positionEnemy.add(new Vector3f(5.5f, 1f, 79f));
         positionEnemy.add(new Vector3f(58.3f, 1f, 79f));
@@ -130,10 +129,10 @@ public class Main extends SimpleApplication implements ActionListener {
         positionEnemy.add(new Vector3f(38f, 1f, -114f));
         positionEnemy.add(new Vector3f(78f, 1f, -114f));
     
-        //HUD
+        // HUD
         hudText = new BitmapText(guiFont, false);
-        hudText.setSize(guiFont.getCharSet().getRenderedSize());      // font size
-        hudText.setColor(ColorRGBA.Yellow);                             // font color
+        hudText.setSize(guiFont.getCharSet().getRenderedSize()+5);          // font size
+        hudText.setColor(ColorRGBA.Blue);                                   // font color
         hudText.setLocalTranslation(20, this.settings.getHeight() - 20, 0); // position
         guiNode.attachChild(hudText);
     }
@@ -240,7 +239,7 @@ public class Main extends SimpleApplication implements ActionListener {
             enemySpeed = enemySpeed + 5;
         }
         
-        hudText.setText("SCORE: " + score + "\nLIFE: " + playerLife + "\nRECORD: " + scoringRecord);
+        hudText.setText("SCORE: " + score + "\nLIFE: " + (int)playerLife + "\nRECORD: " + scoringRecord);
          
         //Movimentação Inimigo
         for(Spatial s : shootables.getChildren()){
@@ -326,18 +325,19 @@ public class Main extends SimpleApplication implements ActionListener {
                 s.getControl(AnimControl.class).getChannel(0).setLoopMode(LoopMode.Cycle);
             }
             
-            playerLife -= 1;
+            playerLife -= 0.001;
         }
         else {
             s.move(dir.x*enemySpeed*tpf, 0, dir.z*enemySpeed*tpf);
-            if(!s.getControl(AnimControl.class).getChannel(0).getAnimationName().equals("Walk") && !s.getControl(AnimControl.class).getChannel(0).getAnimationName().equals("Death1")){
+            if(!s.getControl(AnimControl.class).getChannel(0).getAnimationName().equals("Walk")
+            && !s.getControl(AnimControl.class).getChannel(0).getAnimationName().equals("Death1")){
                 s.getControl(AnimControl.class).getChannel(0).setAnim("Walk");
                 s.getControl(AnimControl.class).getChannel(0).setLoopMode(LoopMode.Loop);
             }
         }
     }
     
-    public void resetVariables(){
+    public void resetVariables() {
         enemySpeed = 5f;
         playerLife = 100;
         score = 0;
