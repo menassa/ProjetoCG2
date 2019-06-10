@@ -23,7 +23,6 @@ import com.jme3.light.DirectionalLight;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Ray;
 import com.jme3.math.Vector3f;
-import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
 import java.util.ArrayList;
@@ -40,28 +39,29 @@ public class Main extends SimpleApplication implements ActionListener {
     private BulletAppState bulletAppState;
     private RigidBodyControl landscape;
   
-    //Player
+    // Jogador
     private CharacterControl player;
-    private Vector3f walkDirection = new Vector3f();
+    private final Vector3f walkDirection = new Vector3f();
     private boolean left = false, right = false, up = false, down = false;
-    private Vector3f camDir = new Vector3f();
-    private Vector3f camLeft = new Vector3f();
+    private final Vector3f camDir = new Vector3f();
+    private final Vector3f camLeft = new Vector3f();
     private double playerLife = 100;
   
-    //Enemy
-    private Vector3f walkDirectionEnemy = new Vector3f();
-    private float enemySpeed = 5f;
+    // Inimigo
+    private final Vector3f walkDirectionEnemy = new Vector3f();
+    private float enemySpeed = 10f;
     private float lastEnemyTime = 0f;
     private float difficultyTime = 0f;
-    private List<Vector3f> positionEnemy = new ArrayList();
+    private final List<Vector3f> positionEnemy = new ArrayList();
     private int qtdEnemy = 0;
     AnimControl control;
     AnimChannel channel;
-  
-    //Game
+    
+    // Jogo
     BitmapText hudText;
     private int score = 0;
     private int scoringRecord = 0;
+    private boolean startgame=false;
 
     public static void main(String[] args) {
         Main app = new Main();
@@ -72,47 +72,41 @@ public class Main extends SimpleApplication implements ActionListener {
     
     @Override
     public void simpleInitApp() {
-        initCrossHairs(); // a "+" in the middle of the screen to help aiming
-        
-        /** Set up Physics */
+        /** Configurando física */
         bulletAppState = new BulletAppState();
         stateManager.attach(bulletAppState);
 
-        // We re-use the flyby camera for rotation, while positioning is handled by physics
+        // Posicionamento feito pela física. Camera reutilizada pra rotação.
         viewPort.setBackgroundColor(new ColorRGBA(0.7f, 0.8f, 1f, 1f));
         flyCam.setMoveSpeed(100);
         setUpKeys();
-        setUpLight();
-
-        // We load the scene from the zip file and adjust its size.
+        
+        if(!startgame){
+            initCrossHairs();   // função que configura a mira no meio da tela.
+            setUpLight();       //função que configura a luz ambiente.
+            startgame=true;
+        }
+        
+        // Mapa carregado do .zip e ajustado na tela.
         assetManager.registerLocator("town.zip", ZipLocator.class);
         sceneModel = assetManager.loadModel("main.scene");
         sceneModel.setLocalScale(2f);
 
-        // We set up collision detection for the scene by creating a
-        // compound collision shape and a static RigidBodyControl with mass zero.
+        // A detecção de colisão é feita através de um RigidBodyControl com peso zero.
         CollisionShape sceneShape = CollisionShapeFactory.createMeshShape(sceneModel);
         landscape = new RigidBodyControl(sceneShape, 0);
         sceneModel.addControl(landscape);
 
-        // We set up collision detection for the player by creating
-        // a capsule collision shape and a CharacterControl.
-        // The CharacterControl offers extra settings for
-        // size, stepheight, jumping, falling, and gravity.
-        // We also put the player in its starting position.
+        // Configuração de tamanho, pulo e queda.
         CapsuleCollisionShape capsuleShape = new CapsuleCollisionShape(1.5f, 6f, 1);
         player = new CharacterControl(capsuleShape, 0.05f);
         player.setJumpSpeed(20);
         player.setFallSpeed(30);
 
-        //Some methods used for setting gravity related variables were deprecated in
-        //the 3.2 version of the engine. Choose the method that matches your version
-        //of the engine.
-        player.setGravity(new Vector3f(0,-70f,0));
+        // Configurando gravidade e física.
+        player.setGravity(new Vector3f(0,-55f,0));
         player.setPhysicsLocation(new Vector3f(0, 10, 0));
-    
-        // We attach the scene and the player to the rootnode and the physics space,
-        // to make them appear in the game world.
+        
         shootables = new Node("Shootables");
         rootNode.attachChild(sceneModel);
     
@@ -131,24 +125,24 @@ public class Main extends SimpleApplication implements ActionListener {
     
         // HUD
         hudText = new BitmapText(guiFont, false);
-        hudText.setSize(guiFont.getCharSet().getRenderedSize()+5);          // font size
-        hudText.setColor(ColorRGBA.Blue);                                   // font color
+        hudText.setSize(guiFont.getCharSet().getRenderedSize()+6);          // font size
+        hudText.setColor(ColorRGBA.Yellow);                                   // font color
         hudText.setLocalTranslation(20, this.settings.getHeight() - 20, 0); // position
         guiNode.attachChild(hudText);
     }
     
+    // configuração de Luz ambiente e luz direcional.
     private void setUpLight() {
-        // We add light so we see the scene
         AmbientLight al = new AmbientLight();
         al.setColor(ColorRGBA.White.mult(1.3f));
         rootNode.addLight(al);
-
         DirectionalLight dl = new DirectionalLight();
         dl.setColor(ColorRGBA.White);
         dl.setDirection(new Vector3f(2.8f, -2.8f, -2.8f).normalizeLocal());
         rootNode.addLight(dl);
     }
     
+    // Configuração de quais teclas serão utilizadas.
     private void setUpKeys() {
         inputManager.addMapping("Left", new KeyTrigger(KeyInput.KEY_A));
         inputManager.addMapping("Right", new KeyTrigger(KeyInput.KEY_D));
@@ -165,44 +159,52 @@ public class Main extends SimpleApplication implements ActionListener {
         inputManager.addListener(this, "Jump");
     }
     
-    /** These are our custom actions triggered by key presses.
-    * We do not walk yet, we just keep track of the direction the user pressed. */
+    // Configuração de cada tecla que será utilizada.
     @Override
     public void onAction(String binding, boolean isPressed, float tpf) {
-        if (binding.equals("Left")) {
-            left = isPressed;
-        } else if (binding.equals("Right")) {
-            right= isPressed;
-        } else if (binding.equals("Up")) {
-            up = isPressed;
-        } else if (binding.equals("Down")) {
-            down = isPressed;
-        } else if (binding.equals("Jump")) {
-            if (isPressed) {
-                player.jump(new Vector3f(0,20f,0));
-            }
-        }else if (binding.equals("Shoot")) {
-            // Colisão do inimigo com o tiro.
-            CollisionResults results = new CollisionResults();
-            Ray ray = new Ray(cam.getLocation(), cam.getDirection());
-            
-            for(Spatial s : shootables.getChildren()){
-                s.collideWith(ray, results);
-                if (results.size() > 0){
-                    s.getControl(AnimControl.class).getChannel(0).setAnim("Death1");
-                    s.getControl(AnimControl.class).getChannel(0).setLoopMode(LoopMode.Cycle);
-                    
-                    score+= 10;
-                    if(score > scoringRecord){
-                        scoringRecord = score;
+        switch (binding) {
+            case "Left":
+                left = isPressed;
+                break;
+            case "Right":
+                right= isPressed;
+                break;
+            case "Up":
+                up = isPressed;
+                break;
+            case "Down":
+                down = isPressed;
+                break;
+            case "Jump":
+                if (isPressed) {
+                    if(cam.getLocation().getY() <= 6f){
+                        player.jump(new Vector3f(0,18f,0));
                     }
-                    
-                    shootables.detachChild(s);
-                    bulletAppState.getPhysicsSpace().remove(s);
-                    
-                    break;
                 }
-            }
+                // Colisão do inimigo com o tiro.
+                break;
+            case "Shoot":
+                CollisionResults results = new CollisionResults();
+                Ray ray = new Ray(cam.getLocation(), cam.getDirection());
+                for(Spatial s : shootables.getChildren()){
+                    s.collideWith(ray, results);
+                    if (results.size() > 0){
+                        s.getControl(AnimControl.class).getChannel(0).setAnim("Death1");
+                        s.getControl(AnimControl.class).getChannel(0).setLoopMode(LoopMode.Cycle);
+                        
+                        score+= 10;
+                        
+                        if(score > scoringRecord){
+                            scoringRecord = score;
+                        }
+                        
+                        shootables.detachChild(s);
+                        bulletAppState.getPhysicsSpace().remove(s);
+                        break;
+                    }
+                }   break;
+            default:
+                break;
         }
     }
     
@@ -229,29 +231,30 @@ public class Main extends SimpleApplication implements ActionListener {
         player.setWalkDirection(walkDirection);
         cam.setLocation(player.getPhysicsLocation());
         
-        if(timer.getTimeInSeconds() > lastEnemyTime + 5){
+        if(timer.getTimeInSeconds() > lastEnemyTime + 1){
             lastEnemyTime = timer.getTimeInSeconds();
             shootables.attachChild(makeCharacter());
         }
         
-        if(timer.getTimeInSeconds() > difficultyTime + 20 && enemySpeed <= 30){
+        if(timer.getTimeInSeconds() > difficultyTime + 40 && enemySpeed <= 60){
             difficultyTime = timer.getTimeInSeconds();
-            enemySpeed = enemySpeed + 5;
+            enemySpeed = enemySpeed + 10;
         }
         
         hudText.setText("SCORE: " + score + "\nLIFE: " + (int)playerLife + "\nRECORD: " + scoringRecord);
          
-        //Movimentação Inimigo
+        // Movimentação do inimigo.
         for(Spatial s : shootables.getChildren()){
             enemyActions(s, tpf);
         }
         
+        // Condição de fim de jogo quando a vida chegar a zero.
         if(playerLife <= 0){
             resetVariables();
         }
     }
     
-    /** A centred plus sign to help the player aim. */
+    /** Configuração da mira na tela. */
     protected void initCrossHairs() {
         setDisplayStatView(false);
         guiFont = assetManager.loadFont("Interface/Fonts/Default.fnt");
@@ -264,37 +267,18 @@ public class Main extends SimpleApplication implements ActionListener {
         guiNode.attachChild(ch);
     }
     
+    /** Criação e configuração do inimigo no cenário
+     * @return  */
     protected Spatial makeCharacter() {
         Spatial enemy = assetManager.loadModel("Models/Ninja/Ninja.mesh.xml");
         enemy.scale(0.025f);
         enemy.setLocalTranslation(positionEnemy.get(qtdEnemy%6)); 
         qtdEnemy++;
-   
+        
         control = enemy.getControl(AnimControl.class);
         channel = control.createChannel();
         channel.setAnim("Walk", 0.50f);
         channel.setLoopMode(LoopMode.Loop);
-
-        //Walk
-        //Kick
-        //Spin
-        //Idle3
-        //Idle2
-        //Jump
-        //Idle1
-        //HighJump
-        //JumpNoHeight
-        //Crouch
-        //Climb
-        //Stealth
-        //Death2
-        //Backflip 
-        //Block
-        //SideKick
-        //Death1
-        //Attack3
-        //Attack2
-        //Attack1
         return enemy;
     }
     
@@ -310,6 +294,7 @@ public class Main extends SimpleApplication implements ActionListener {
         // unused
     }
     
+    // Configuração de ações dos inimigos.
     public void enemyActions(Spatial s, float tpf){
         s.lookAt(cam.getLocation(),  Vector3f.UNIT_Y.normalize());
         s.rotate(0, (float) Math.PI , 0);
@@ -325,7 +310,7 @@ public class Main extends SimpleApplication implements ActionListener {
                 s.getControl(AnimControl.class).getChannel(0).setLoopMode(LoopMode.Cycle);
             }
             
-            playerLife -= 0.001;
+            playerLife -= 0.002; // Vida do jogador diminui quando os inimigos estão perto demais.
         }
         else {
             s.move(dir.x*enemySpeed*tpf, 0, dir.z*enemySpeed*tpf);
@@ -337,9 +322,14 @@ public class Main extends SimpleApplication implements ActionListener {
         }
     }
     
+    // Configuração de reset de variáveis para reinicio do jogo.
     public void resetVariables() {
-        enemySpeed = 5f;
+        shootables.detachAllChildren();
+        rootNode.detachAllChildren();
+        hudText.setText("");
+        enemySpeed = 10f;
         playerLife = 100;
         score = 0;
+        simpleInitApp();
     }
 }
