@@ -25,6 +25,7 @@ import com.jme3.math.Ray;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
+import com.jme3.ui.Picture;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -83,6 +84,7 @@ public class Main extends SimpleApplication implements ActionListener {
         
         if(!startgame){
             initCrossHairs();   // função que configura a mira no meio da tela.
+            initGun();          // função que configura a arma no canto da tela.
             setUpLight();       //função que configura a luz ambiente.
             startgame=true;
         }
@@ -267,6 +269,16 @@ public class Main extends SimpleApplication implements ActionListener {
         guiNode.attachChild(ch);
     }
     
+    /** Configuração da arma na tela. */
+    protected void initGun() {
+        Picture pic = new Picture("Imagem");
+        pic.setImage(assetManager, "gun.png", true);
+        pic.setWidth(settings.getWidth()-50);
+        pic.setHeight(settings.getHeight()-30);
+        pic.setPosition(settings.getWidth()-675, settings.getHeight()-675);
+        guiNode.attachChild(pic);
+    }
+    
     /** Criação e configuração do inimigo no cenário
      * @return  */
     protected Spatial makeCharacter() {
@@ -310,7 +322,7 @@ public class Main extends SimpleApplication implements ActionListener {
                 s.getControl(AnimControl.class).getChannel(0).setLoopMode(LoopMode.Cycle);
             }
             
-            playerLife -= 0.002; // Vida do jogador diminui quando os inimigos estão perto demais.
+            playerLife -= 0.02; // Vida do jogador diminui quando os inimigos estão perto demais.
         }
         else {
             s.move(dir.x*enemySpeed*tpf, 0, dir.z*enemySpeed*tpf);
